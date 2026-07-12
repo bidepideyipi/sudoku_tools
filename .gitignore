@@ -1,0 +1,49 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.python-version
+
+# C++ 构建产物（cpp/）
+cpp/generate_puzzles
+cpp/**/*.o
+cpp/build/
+cpp/cmake-build-*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.generated
+
+# SQLite 运行时文件
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 本地导出 / 临时题库（保留 db/puzzles.db 与 db/puzzles.schema.sql）
+db/*.tsv
+db/*_test.db
+db/*.tmp
+
+# 日志与调试输出
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*~

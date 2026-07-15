@@ -8,10 +8,10 @@
 
 ```
 sudoku_tools/
-├── cpp/                 ← 本目录：编译生成 generate_puzzles
-├── db/puzzles.db        ← --out 默认写入目标
+├── cpp/                 ← generate_puzzles + generate_dungeon_puzzles
+├── db/puzzles.db        ← 两套表共存
 ├── db/puzzles.schema.sql
-└── script/export_ddl.py ← 可选：从 db 反向导出 DDL（与生成无关）
+└── script/export_ddl.py
 ```
 
 生成完成后，将 `db/puzzles.db` **手工复制**到 `sudoku_app/assets/data/puzzles.db` 供 Flutter 打包使用。
@@ -26,71 +26,89 @@ sudoku_tools/
 
 ```bash
 cd sudoku_tools/cpp
-make
+make            # 产出 generate_puzzles 与 generate_dungeon_puzzles
 # 或
 cmake -S . -B build && cmake --build build -j
-# CMake 产物：build/generate_puzzles
 ```
 
-## 运行
+---
+
+## Free / Daily：`generate_puzzles`
 
 ```bash
-# 生成 1 题，TSV 输出到 stdout
 ./generate_puzzles --count 1 --difficulty medium
-
-# 写入 SQLite（写入前删除该难度旧数据）
 ./generate_puzzles --count 100 --difficulty easy --out ../db/puzzles.db
-
-# 四档各 100 题（共 400）
 ./generate_puzzles --count 400 --difficulty all --out ../db/puzzles.db
-
-# 调试日志（stderr）
 ./generate_puzzles --verbose --count 40 --difficulty expert --out ../db/puzzles.db
-
-# 性能测试（不打印 TSV，仅 stderr 统计）
 ./generate_puzzles --benchmark --count 100 --difficulty expert
-
-# 固定随机种子（可复现）
 ./generate_puzzles --seed 42 --count 5 --difficulty hard
 ```
 
-### CLI 参数
+| 参数 | 说明 |
+|------|------|
+| `--count N` | 目标成功题数 |
+| `--difficulty` | `easy` \| `medium` \| `hard` \| `expert` \| `all` |
+| `--out PATH` | 写入表 `puzzles` |
+| `--seed N` | 固定 PRNG 种子 |
+| `--verbose` / `-v` | stderr 调试日志 |
+| `--benchmark` | 不输出 TSV，仅耗时统计 |
+
+写入表：`puzzles`（某难度首次写入前删除该难度旧数据）。
+
+---
+
+## 副本：`generate_dungeon_puzzles`
+
+与 `generate_puzzles` **独立可执行文件**，只写副本表，**不改** `puzzles`。
+
+默认：按 **topology** 题池写入（`mini_6x6`：`--per-pool`；`classic_9x9`：`4×per-pool` 轮转挖空以保多样性）。题表**无** `difficulty`；`readme` 在 **`dungeon_chapters`**（生成器留空）。
+
+```bash
+# 重建副本表并写入题池（不改 free puzzles）
+./generate_dungeon_puzzles --verbose --per-pool 10 --out ../db/puzzles.db
+
+./generate_dungeon_puzzles --seed 42 -v
+make run-dungeon
+```
+
+写入表（见 `db/puzzles.schema.sql`）：
+
+| 表 | 说明 |
+|----|------|
+| `dungeon_puzzles` | 题池（仅 `topology` / 盘面；无 difficulty） |
+| `dungeon_chapters` | 12 章元数据（含 `difficulty` + `readme`） |
+
+开局：`WHERE topology=? ORDER BY RANDOM() LIMIT 1`。
 
 | 参数 | 说明 |
 |------|------|
-| `--count N` | 目标**成功**题数；单批失败会开新一批重试，直到凑满 N 题 |
-| `--difficulty` | `easy` \| `medium` \| `hard` \| `expert` \| `all` |
-| `--out PATH` | 写入 SQLite；某难度首次写入前 `DELETE` 该难度旧数据 |
-| `--seed N` | 固定 PRNG 种子 |
-| `--verbose` / `-v` | stderr 调试日志（单批进度、失败重试等） |
-| `--benchmark` | 不输出题目 TSV，仅打印耗时统计 |
+| `--per-pool N` | 每 topology 基数（默认 10；9×9 为 `4N`；`--per-chapter` 为别名） |
+| `--out PATH` | 默认 `../db/puzzles.db` |
+| `--seed N` | 固定种子 |
+| `--verbose` / `-v` | 进度日志 |
+
+---
 
 ## 生成算法
 
-1. 回溯 + 随机 1~9 顺序 → 完整终盘
-2. 按难度挖空（当前配置）：
+**9×9（free + 副本章 2~12）**
 
-   | 难度 | 挖空数 | 给定数 |
-   |------|--------|--------|
-   | Easy | 30 | 51 |
-   | Medium | 38 | 43 |
-   | Hard | 46 | 35 |
-   | Expert | 54 | 27 |
+1. 回溯随机终盘 → 按难度挖空 → 唯一解校验  
+2. 挖空数（与源码一致）：Easy **27** / Medium **36** / Hard **45** / Expert **54**  
+3. 单批最多 5000 attempt  
 
-3. 每挖 **5** 格或挖满时校验唯一解；本批失败则换新终盘重试
-4. 单批最多 **5000** 次 attempt，耗尽后由外层再开新一批（见 `--count`）
+**6×6（副本章 1）**
 
-## 输出格式
+- 宫 **2×3**，数字 1~6，默认挖空 **14** / 36，唯一解校验  
 
-与 `puzzles.db` 表结构一致（`script/export_ddl.py` 可导出 DDL）：
+## 输出格式（Free）
 
 | 字段 | 说明 |
 |------|------|
-| `id` | UUID v4 字符串 |
-| `puzzle` | 81 字符，行优先，`0` = 空格 |
-| `solution` | 81 字符完整答案 |
-| `difficulty` | 1=easy, 2=medium, 3=hard, 4=expert |
-| `created_at` | UTC 秒级时间戳 |
+| `id` | UUID v4 |
+| `puzzle` / `solution` | 81 字符，行优先，`0` = 空格 |
+| `difficulty` | 1..4 |
+| `created_at` | UTC 秒 |
 
 ## 目录结构
 
@@ -98,11 +116,16 @@ cmake -S . -B build && cmake --build build -j
 cpp/
 ├── include/
 │   ├── sudoku_generator.h
-│   └── puzzle_db_writer.h
+│   ├── mini_sudoku_generator.h
+│   ├── puzzle_db_writer.h
+│   └── dungeon_db_writer.h
 ├── src/
 │   ├── sudoku_generator.cpp
+│   ├── mini_sudoku_generator.cpp
 │   ├── puzzle_db_writer.cpp
-│   └── main.cpp
+│   ├── dungeon_db_writer.cpp
+│   ├── main.cpp                 → generate_puzzles
+│   └── main_dungeon.cpp         → generate_dungeon_puzzles
 ├── docs/
 ├── Makefile
 └── CMakeLists.txt
@@ -115,4 +138,4 @@ cpp/
 | 约束检查 | 行/列/宫 **位掩码** O(1) |
 | 唯一解搜索 | **MRV** + 候选 bit 迭代 |
 | 多解检测 | 解数 >1 **早停** |
-| 内存 | 栈上 `int[9][9]`，热路径无堆分配 |
+| 内存 | 栈上棋盘，热路径无堆分配 |

@@ -239,11 +239,11 @@ void SudokuGenerator::Seed(std::uint64_t seed) {
 int SudokuGenerator::holesByDifficulty(Difficulty difficulty) {
   switch (difficulty) {
     case Difficulty::Easy:
-      return 30;
+      return 27;
     case Difficulty::Medium:
-      return 38;
+      return 36;
     case Difficulty::Hard:
-      return 46;
+      return 45;
     case Difficulty::Expert:
       return 54;
     default:
@@ -340,7 +340,7 @@ bool SudokuGenerator::fillBoard(int board[9][9], int row_mask[9], int col_mask[9
   return false;
 }
 
-/// 从终盘随机挖空 holes 格；每挖 5 格或挖满时校验唯一解，失败则整批作废。
+/// 从终盘随机挖空 holes 格；每挖 3 格或挖满时校验唯一解，失败则整批作废。
 bool SudokuGenerator::digHolesWithValidation(const int solution[9][9], int holes,
                                              int puzzle[9][9]) {
   std::memcpy(puzzle, solution, 9 * 9 * sizeof(int));
@@ -361,7 +361,7 @@ bool SudokuGenerator::digHolesWithValidation(const int solution[9][9], int holes
     puzzle[row][col] = 0;
     ++count;
 
-    if (count % 5 == 0 || count == holes) {
+    if (count % 3 == 0 || count == holes) {
       if (!hasUniqueSolution(puzzle)) {
         return false;
       }

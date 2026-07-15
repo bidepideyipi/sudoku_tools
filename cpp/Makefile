@@ -2,25 +2,37 @@ CXX ?= c++
 CXXFLAGS ?= -std=c++14 -O3 -Wall -Wextra -Wpedantic -Iinclude
 LDFLAGS ?= -lsqlite3
 
-SRC = src/sudoku_generator.cpp src/puzzle_db_writer.cpp src/main.cpp
-OBJ = $(SRC:.cpp=.o)
-TARGET = generate_puzzles
+COMMON_GEN = src/sudoku_generator.cpp
+FREE_SRC = $(COMMON_GEN) src/puzzle_db_writer.cpp src/main.cpp
+DUNGEON_SRC = $(COMMON_GEN) src/mini_sudoku_generator.cpp src/dungeon_db_writer.cpp src/main_dungeon.cpp
 
-.PHONY: all clean run benchmark
+FREE_OBJ = $(FREE_SRC:.cpp=.o)
+DUNGEON_OBJ = $(DUNGEON_SRC:.cpp=.o)
 
-all: $(TARGET)
+FREE_TARGET = generate_puzzles
+DUNGEON_TARGET = generate_dungeon_puzzles
 
-$(TARGET): $(OBJ)
+.PHONY: all clean run benchmark run-dungeon
+
+all: $(FREE_TARGET) $(DUNGEON_TARGET)
+
+$(FREE_TARGET): $(FREE_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-src/%.o: src/%.cpp include/sudoku_generator.h include/puzzle_db_writer.h
+$(DUNGEON_TARGET): $(DUNGEON_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+src/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(FREE_OBJ) $(DUNGEON_OBJ) $(FREE_TARGET) $(DUNGEON_TARGET)
 
-run: $(TARGET)
-	./$(TARGET) --count 1 --difficulty medium
+run: $(FREE_TARGET)
+	./$(FREE_TARGET) --count 1 --difficulty medium
 
-benchmark: $(TARGET)
-	./$(TARGET) --benchmark --count 50 --difficulty expert
+benchmark: $(FREE_TARGET)
+	./$(FREE_TARGET) --benchmark --count 50 --difficulty expert
+
+run-dungeon: $(DUNGEON_TARGET)
+	./$(DUNGEON_TARGET) --verbose --per-pool 10 --out ../db/puzzles.db
